@@ -192,7 +192,9 @@ export async function fetchSiriDepartureTimes(
   signal?: AbortSignal,
 ): Promise<string[]> {
   const rides = await fetchSiriRides(lineRef, window, signal)
-  return rides.map((ride) => ride.scheduledStartTime)
+  return rides.flatMap((ride) =>
+    ride.scheduledStartTime ? [ride.scheduledStartTime] : [],
+  )
 }
 
 export async function fetchSiriRides(
@@ -215,7 +217,7 @@ export async function fetchSiriRides(
       return {
         id: requiredNumber(value, 'id'),
         journeyRef: stringValue(value, 'journey_ref'),
-        scheduledStartTime: requiredString(value, 'scheduled_start_time'),
+        scheduledStartTime: stringValue(value, 'scheduled_start_time'),
         vehicleRef: stringValue(value, 'vehicle_ref'),
         lineRef: numberValue(value, 'siri_route__line_ref'),
         operatorRef: numberValue(value, 'siri_route__operator_ref'),

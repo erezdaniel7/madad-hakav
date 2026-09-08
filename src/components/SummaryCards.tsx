@@ -36,8 +36,11 @@ export function SummaryCards({ passages, points }: SummaryCardsProps) {
   const firstPoint = points[0]
   const lastPoint = points.at(-1)
   const plannedStart = origin?.stop.plannedArrivalTime ?? firstPoint?.scheduledStartTime ?? null
-  const observedStart = origin?.point?.recordedAtTime ?? firstPoint?.recordedAtTime ?? null
+  const observedStart = origin?.point?.recordedAtTime ?? null
   const departureDelay = delayMinutes(plannedStart, observedStart)
+  const firstObservedStopIndex = passages.findIndex((passage) => passage.point)
+  const firstObservedStop =
+    firstObservedStopIndex >= 0 ? passages[firstObservedStopIndex] : null
   const plannedEnd = destination?.stop.plannedArrivalTime ?? null
   const observedEnd = destination?.point?.recordedAtTime ?? null
   const arrivalDelay = delayMinutes(plannedEnd, observedEnd)
@@ -72,18 +75,22 @@ export function SummaryCards({ passages, points }: SummaryCardsProps) {
       <article>
         <span className="summary-icon delay">◷</span>
         <div>
-          <span>איחור ביציאה</span>
-          <strong>
-            {!origin?.point && departureDelay !== null ? 'לפחות ' : ''}
-            {delayText(departureDelay)}
-          </strong>
-          <small>
-            {timePair(
-              plannedStart,
-              observedStart,
-              origin?.point ? 'בפועל' : 'GPS ראשון',
-            )}
-          </small>
+          <span>{origin?.point ? 'איחור ביציאה' : 'יציאה מתחנת המוצא'}</span>
+          {origin?.point ? (
+            <>
+              <strong>{delayText(departureDelay)}</strong>
+              <small>{timePair(plannedStart, observedStart, 'בפועל')}</small>
+            </>
+          ) : (
+            <>
+              <strong>לא ניתנת לאימות</strong>
+              <small>
+                {firstObservedStop
+                  ? `ה-GPS התחיל בתחנה ${firstObservedStopIndex + 1}; האיחור שם היה ${delayText(firstObservedStop.delayMinutes)}`
+                  : 'לא התקבל GPS בתחנת המוצא או בתחנות המסלול'}
+              </small>
+            </>
+          )}
         </div>
       </article>
       <article>

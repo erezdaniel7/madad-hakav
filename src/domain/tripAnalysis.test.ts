@@ -147,6 +147,39 @@ describe('ride identity classification', () => {
         expect(preferredTargetRideId(options, null)).toBeNull()
     })
 
+    it('includes a SIRI target ride even when it has no GPS observations', () => {
+        const options = buildRideOptions(
+            [],
+            target,
+            [ride(1, '2026-08-30T14:00:00Z')],
+        )
+
+        expect(options).toEqual([
+            expect.objectContaining({
+                id: 1,
+                relation: 'target',
+                pointCount: 0,
+                sources: ['siri'],
+            }),
+        ])
+        expect(preferredTargetRideId(options, null)).toBe(1)
+    })
+
+    it('keeps a SIRI ride without a marked start time visible', () => {
+        const unmarked = ride(3, '2026-08-30T14:00:00Z')
+        unmarked.scheduledStartTime = null
+
+        const options = buildRideOptions([], target, [unmarked])
+
+        expect(options[0]).toEqual(
+            expect.objectContaining({
+                relation: 'unmarked',
+                scheduledStartTime: null,
+                pointCount: 0,
+            }),
+        )
+    })
+
     it('scores a target safely before timetable stops are loaded', () => {
         const locations = [
             point(1, '2026-08-30T14:00:00Z', '2026-08-30T14:25:00Z'),
@@ -201,6 +234,25 @@ describe('ride identity classification', () => {
         })
         expect(evidence.state).toBe('feed-gap')
         expect(evidence.maxGapMinutes).toBe(6)
+    })
+
+    it('treats a trace that starts after the origin as incomplete evidence', () => {
+        const points = [
+            point(1, '2026-08-30T14:00:00Z', '2026-08-30T14:32:00Z'),
+            point(2, '2026-08-30T14:00:00Z', '2026-08-30T14:33:00Z'),
+        ]
+        const evidence = analyzeTripEvidence({
+            targetScheduledTime: target,
+            siriRides: [ride(1, '2026-08-30T14:00:00Z')],
+            rideOptions: buildRideOptions(points, target),
+            points,
+            stops,
+            passages,
+        })
+
+        expect(evidence.state).toBe('feed-gap')
+        expect(evidence.originObservationMissing).toBe(true)
+        expect(evidence.explanation).toContain('אין נתוני GPS מתחנת המוצא')
     })
 
     it('reports a prolonged stationary period without calling it a breakdown', () => {

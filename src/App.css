@@ -407,6 +407,17 @@ h3 {
   color: #71817d;
 }
 
+.ride-options .ride-data-missing {
+  color: #9a5d00;
+  font-weight: 700;
+}
+
+.data-source-label {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 .ride-relation {
   width: max-content;
   padding: 2px 7px;
