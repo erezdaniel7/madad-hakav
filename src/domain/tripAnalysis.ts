@@ -18,9 +18,10 @@ const SUSTAINED_DEVIATION_POINTS = 3
 
 export function stopsForSelectedRide(
     timetable: readonly TimetableStop[],
-    scheduledStartTime: string,
+    scheduledStartTime: string | null,
     fallbackStops: readonly TimetableStop[],
 ): TimetableStop[] {
+    if (scheduledStartTime === null) return [...fallbackStops]
     const departureTime = localTimeValue(scheduledStartTime)
     const candidates = timetable.filter(
         (stop) =>
@@ -51,8 +52,36 @@ export function stopsForSelectedRide(
 export function buildRideOptions(
     locations: readonly VehicleLocation[],
     targetScheduledTime: Date,
+    siriRides: readonly SiriRideSummary[] = [],
 ): RideOption[] {
     const rides = new Map<number, RideOption>()
+    for (const ride of siriRides) {
+        const scheduled = ride.scheduledStartTime
+            ? new Date(ride.scheduledStartTime).getTime()
+            : null
+        const delta =
+            scheduled === null
+                ? 0
+                : (scheduled - targetScheduledTime.getTime()) / 60_000
+        const relation: RideOption['relation'] =
+            scheduled === null
+                ? 'unmarked'
+                : Math.abs(scheduled - targetScheduledTime.getTime()) <= TARGET_TOLERANCE_MS
+                    ? 'target'
+                    : delta > 0
+                        ? 'following'
+                        : 'nearby'
+        rides.set(ride.id, {
+            id: ride.id,
+            journeyRef: ride.journeyRef,
+            scheduledStartTime: ride.scheduledStartTime,
+            vehicleRef: ride.vehicleRef,
+            pointCount: 0,
+            scheduleDeltaMinutes: Math.round(delta),
+            relation,
+            sources: ['siri'],
+        })
+    }
     for (const location of locations) {
         const scheduled = new Date(location.scheduledStartTime).getTime()
         const delta = (scheduled - targetScheduledTime.getTime()) / 60_000
@@ -65,6 +94,10 @@ export function buildRideOptions(
         const existing = rides.get(location.siriRideId)
         if (existing) {
             existing.pointCount += 1
+            if (!existing.sources.includes('gps')) existing.sources.push('gps')
+            existing.vehicleRef ??= location.vehicleRef
+            existing.journeyRef ??= location.journeyRef
+            existing.scheduledStartTime ??= location.scheduledStartTime
         } else {
             rides.set(location.siriRideId, {
                 id: location.siriRideId,
@@ -74,11 +107,12 @@ export function buildRideOptions(
                 pointCount: 1,
                 scheduleDeltaMinutes: Math.round(delta),
                 relation,
+                sources: ['gps'],
             })
         }
     }
     return [...rides.values()].sort((a, b) => {
-        const rank = { target: 0, following: 1, nearby: 2 }
+        const rank = { target: 0, unmarked: 1, following: 2, nearby: 3 }
         return (
             rank[a.relation] - rank[b.relation] ||
             Math.abs(a.scheduleDeltaMinutes) - Math.abs(b.scheduleDeltaMinutes) ||
@@ -306,6 +340,7 @@ export function analyzeTripEvidence({
     const targetRideIds = siriRides
         .filter(
             (ride) =>
+                ride.scheduledStartTime !== null &&
                 Math.abs(
                     new Date(ride.scheduledStartTime).getTime() - targetScheduledTime.getTime(),
                 ) <= TARGET_TOLERANCE_MS,
@@ -315,6 +350,7 @@ export function analyzeTripEvidence({
     const followingRides = rideOptions.filter((ride) => ride.relation === 'following')
     const followingScheduledRideCount = siriRides.filter(
         (ride) =>
+            ride.scheduledStartTime !== null &&
             new Date(ride.scheduledStartTime).getTime() - targetScheduledTime.getTime() >
             TARGET_TOLERANCE_MS,
     ).length
@@ -333,10 +369,17 @@ export function analyzeTripEvidence({
 
     let state: TripEvidence['state']
     let explanation: string
+    const originObservationMissing =
+        passages.length > 0 && !passages[0]?.point
     if (targetObserved && points.length >= 2) {
-        state = interruptions.length > 0 ? 'feed-gap' : 'observed'
+        state =
+            interruptions.length > 0 || originObservationMissing
+                ? 'feed-gap'
+                : 'observed'
         explanation =
-            interruptions.length > 0
+            originObservationMissing
+                ? 'הנסיעה נצפתה רק בהמשך המסלול. אין נתוני GPS מתחנת המוצא, ולכן אי אפשר לקבוע את איחור היציאה.'
+                : interruptions.length > 0
                 ? 'הנסיעה נצפתה, אך רצף נתוני ה-GPS כולל פערים.'
                 : 'הנסיעה המתוכננת נצפתה בנתוני ה-GPS.'
     } else if (targetRideIds.length > 0) {
@@ -367,7 +410,7 @@ export function analyzeTripEvidence({
         stalls,
         targetVehicleCount: targetVehicles.size,
         ...adherence,
-        originObservationMissing: passages.length > 0 && !passages[0]?.point,
+        originObservationMissing,
         destinationObservationMissing:
             passages.length > 0 && !passages.at(-1)?.point,
         explanation,

@@ -17,6 +17,7 @@ import { SearchPanel } from './components/SearchPanel'
 import { StopsTable } from './components/StopsTable'
 import { SummaryCards } from './components/SummaryCards'
 import { TripMap } from './components/TripMap'
+import { DATA_SOURCE_TOOLTIP } from './config/dataSources'
 import { getRoute } from './config/routes'
 import {
   estimateStopPassages,
@@ -346,22 +347,16 @@ function App() {
   const departureOptions = useMemo(
     () => {
       const options = new Map<string, string | null>()
-      for (const timestamp of siriDepartureTimes) {
-        const time = localTimeValue(timestamp)
-        if (!options.has(time)) options.set(time, null)
-      }
-      if (options.size === 0) {
-        for (const stop of timetable) {
-          if (!stop.lineStartTime) continue
-          const time = localTimeValue(stop.lineStartTime)
-          if (!options.has(time)) options.set(time, stop.name)
-        }
+      for (const stop of timetable) {
+        if (!stop.lineStartTime) continue
+        const time = localTimeValue(stop.lineStartTime)
+        if (!options.has(time)) options.set(time, stop.name)
       }
       return [...options].sort(([a], [b]) => a.localeCompare(b)).map(
         ([time, stationName]) => ({ time, stationName }),
       )
     },
-    [siriDepartureTimes, timetable],
+    [timetable],
   )
   const plannedTripCount = useMemo(
     () =>
@@ -389,9 +384,16 @@ function App() {
   const rides = useMemo(
     () =>
       targetScheduledTime
-        ? buildRideOptions(locations, targetScheduledTime)
+        ? buildRideOptions(locations, targetScheduledTime, comparisonRides)
         : [],
-    [locations, targetScheduledTime],
+    [comparisonRides, locations, targetScheduledTime],
+  )
+  const selectableRides = useMemo(
+    () =>
+      rides.filter(
+        (ride) => ride.relation === 'target' || ride.relation === 'unmarked',
+      ),
+    [rides],
   )
   const targetStops = useMemo(
     () => selectStopsForDeparture(timetable, filters.departureTime),
@@ -404,9 +406,25 @@ function App() {
     targetStops,
   )
   const activeRide = rides.find((ride) => ride.id === activeRideId) ?? null
+  const isToday = filters.date === jerusalemToday()
+  const activeRideStatus = activeRide
+    ? activeRide.pointCount > 0
+      ? 'נתוני GPS זמינים'
+      : isToday
+        ? 'אין נתונים עדיין'
+        : 'לא נצפתה ב-GPS / ייתכן שבוטלה'
+    : null
+  const activeRideSource = activeRide
+    ? [
+      'SIRI',
+      ...(activeRide.sources.includes('gps')
+        ? [isToday ? 'GPS חי' : 'GPS היסטורי']
+        : []),
+    ].join(' + ')
+    : null
   const stops = useMemo(
     () =>
-      activeRide
+      activeRide?.scheduledStartTime
         ? stopsForSelectedRide(
           timetable,
           activeRide.scheduledStartTime,
@@ -712,11 +730,27 @@ function App() {
                       <dt>תצפיות GPS</dt>
                       <dd>{activeRide.pointCount}</dd>
                     </div>
+                    <div>
+                      <dt>מצב נתונים</dt>
+                      <dd>{activeRideStatus}</dd>
+                    </div>
+                    <div>
+                      <dt>מקור</dt>
+                      <dd>
+                        <span
+                          className="data-source-label"
+                          title={DATA_SOURCE_TOOLTIP}
+                        >
+                          {activeRideSource}
+                        </span>
+                      </dd>
+                    </div>
                   </dl>
                 )}
                 <RideSelector
-                  rides={rides}
+                  rides={selectableRides}
                   selectedRideId={activeRideId}
+                  isToday={isToday}
                   onSelect={(rideId) => setFilters((current) => ({ ...current, rideId }))}
                 />
                 {tripEvidence && <EvidencePanel evidence={tripEvidence} />}

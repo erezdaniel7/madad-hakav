@@ -129,7 +129,7 @@ export function SearchPanel({
           ? 'טוען שעות יציאה מתוכננות…'
           : timetableMessage ??
           (departureOptions.length > 0
-            ? `נמצאו ${departureOptions.length} יציאות זמינות ליום שנבחר.`
+            ? `נמצאו ${departureOptions.length} יציאות מתוכננות ליום שנבחר.`
             : 'לא נמצאו יציאות מתוכננות ליום שנבחר.')}
       </div>
       {(plannedTripCount > 0 || siriTripCount > 0) && (

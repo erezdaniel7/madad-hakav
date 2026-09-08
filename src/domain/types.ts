@@ -50,17 +50,18 @@ export interface VehicleLocation {
 export interface RideOption {
   id: number
   journeyRef: string | null
-  scheduledStartTime: string
+  scheduledStartTime: string | null
   vehicleRef: string | null
   pointCount: number
   scheduleDeltaMinutes: number
-  relation: 'target' | 'following' | 'nearby'
+  relation: 'target' | 'following' | 'nearby' | 'unmarked'
+  sources: ('siri' | 'gps')[]
 }
 
 export interface SiriRideSummary {
   id: number
   journeyRef: string | null
-  scheduledStartTime: string
+  scheduledStartTime: string | null
   vehicleRef: string | null
   lineRef: number | null
   operatorRef: number | null
